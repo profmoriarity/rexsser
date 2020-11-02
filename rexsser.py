@@ -76,7 +76,6 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
     def getUiComponent(self):
         return self._splitpane
 
-
     
     def getRowCount(self):
         try:
@@ -85,7 +84,7 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
             return 0
 
     def getColumnCount(self):
-        return 3
+        return 4
 
     def getColumnName(self, columnIndex):
         if columnIndex == 0:
@@ -94,6 +93,8 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
             return "Parameter"
         if columnIndex == 2:
             return "URL"
+        if columnIndex == 3:
+            return "WAF Status"
         return ""
 
     def getValueAt(self, rowIndex, columnIndex):
@@ -104,6 +105,8 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
             return logEntry._parameter
         if columnIndex == 2:
             return logEntry._url
+        if columnIndex == 3:
+            return logEntry._waf
         return ""
 
     
@@ -127,10 +130,10 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
             if self._callbacks.getToolName(toolFlag) == "Proxy":
                     self.processTestcases(patt, messageInfo, payload)
 
-    def issues(self, messageInfo, detail, param):
+    def issues(self, messageInfo, detail, param, waf):
         self._lock.acquire()
         row = self._log.size()
-        self._log.add(LogEntry(param, self._callbacks.saveBuffersToTempFiles(messageInfo), self._helpers.analyzeRequest(messageInfo).getUrl(), detail))
+        self._log.add(LogEntry(param, self._callbacks.saveBuffersToTempFiles(messageInfo), self._helpers.analyzeRequest(messageInfo).getUrl(), detail, waf))
         self.fireTableRowsInserted(row, row)
         self._lock.release()
 
@@ -156,6 +159,8 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
                     t = threading.Thread(target=self.makeRequest,args=[messageInfo.getHttpService(), newrequest, word, payload])    
                     t.daemon = True
                     t.start()
+    
+
 
     def makeRequest(self, httpservice, requestBytes, word, payload):
         #useHttps = 1 if httpservice.getProtocol() == 'https' else 0
@@ -166,29 +171,35 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
         url = self._helpers.analyzeRequest(bRequestResponse).getUrl()
         response = self._helpers.bytesToString(tResp)
         if status != 302:
+            if status == 200:
+                waf = "Allowed"
+            else:
+                waf = "Unknown"
             if payload in response:
                 if payload  == 'fixedvaluehopefullyexists':
                     str1 = word+" is a valid parameter"
                     str2 = self.definesContext(payload, response)
-                    self.issues(bRequestResponse, str1+" "+str2, word)
+                    self.issues(bRequestResponse, str2+" "+str1, word, waf)
                 if payload == 'random1\'ss':
                     str1 = word+" single quote reflection allowed"
                     str2 = self.definesContext(payload, response)
-                    self.issues(bRequestResponse, str1+" "+str2, word)
+                    self.issues(bRequestResponse, str2+" "+str1, word, waf)
                 if payload == 'random2"ss':
                     str1 = word+" Double quote allowed"
                     str2 = self.definesContext(payload, response)
-                    self.issues(bRequestResponse, str1+" "+str2, word)
+                    self.issues(bRequestResponse, str2+" "+str1, word, waf)
                 if payload == 'dumm</script>ss':
                     str1 = word+" Script tags allowed"
                     str2 = self.definesContext(payload, response)
-                    self.issues(bRequestResponse, str1+" "+str2, word)
+                    self.issues(bRequestResponse, str2+" "+str1, word, waf)
                 if payload == '<h1>duteer</h1>ss':
                     str1 = word+" HTML tags allowed"
                     str2 = self.definesContext(payload, response)
-                    self.issues(bRequestResponse, str1+" "+str2, word)
+                    self.issues(bRequestResponse, str2+" "+str1, word, waf)
             else:
                 pass
+        if status == 403:
+            self.issues(bRequestResponse, "", word, "Blocked")
 
 
     def definesContext(self, reflection, html):
@@ -196,11 +207,11 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
         q = html[indx-1]
         q2 = html[indx+len(reflection)]
         if q in reflection and q =='"':
-            return "Vulnerable to RXSS - attribute Context \""
+            return "[Vulnerable][attribute][\"]"
         if q in reflection and q =="'":
-            return "Vulnerable to RXSS - attribute Context '"
+            return "[Vulnerable][attribute][']"
         else:
-            return ""
+            return "[Possible]"
 
 
 
@@ -221,8 +232,12 @@ class Table(JTable):
     
 
 class LogEntry:
-    def __init__(self, parameter, requestResponse, url, detail):
+    def __init__(self, parameter, requestResponse, url, detail, waf):
         self._parameter = parameter
         self._requestResponse = requestResponse
         self._url = url
         self._detail = detail
+        self._waf = waf
+
+
+
