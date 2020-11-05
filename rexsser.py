@@ -152,9 +152,21 @@ class BurpExtender(IBurpExtender, IHttpListener, IProxyListener, IScannerListene
             for y in x:
                     words.append(y[0])
             sortedwords = list(set(words))
+            requestString  = self._helpers.bytesToString(messageInfo.getRequest())
+            if 'GET /' in requestString:
+                mthd = 'GET'
+            elif 'POST /' in requestString:
+                mthd = 'POST'
+            else:
+                mthd = 'GET'
             if len(sortedwords) > 0:
                 for word in sortedwords:
-                    param = self._helpers.buildParameter(word, inject , IParameter.PARAM_URL)
+                    if mthd == 'GET':
+                        param = self._helpers.buildParameter(word, inject , IParameter.PARAM_URL)
+                    elif mthd == 'POST':
+                        param = self._helpers.buildParameter(word, inject, IParameter.PARAM_BODY)
+                    else:
+                        param = self._helpers.buildParameter(word, inject , IParameter.PARAM_URL)
                     newrequest  = self._helpers.addParameter(messageInfo.getRequest(), param)
                     t = threading.Thread(target=self.makeRequest,args=[messageInfo.getHttpService(), newrequest, word, payload])    
                     t.daemon = True
