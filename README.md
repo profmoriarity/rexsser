@@ -16,7 +16,7 @@ This is a burp plugin (python) that extracts keywords from response using regexe
 ### Todo
 
 - [ ] Add Multiple regexes to extract words (Example: input elements in the page response)
-- [ ] Content-Type filter
-- [ ] Scope checkbox
-- [ ] Process only given status-codes
-- [ ] Turn off/on
+- [x] Content-Type filter
+- [x] Scope checkbox
+- [x] Process only given status-codes
+- [x] Turn off/on
