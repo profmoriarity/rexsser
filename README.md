@@ -7,7 +7,7 @@ This is a burp plugin (python) that extracts keywords from response using regexe
  
 ### Screenshots
 
-![img](https://i.imgur.com/7ygeBN1.jpg)
+![img](https://i.imgur.com/GZm0K8R.jpg)
 
 ### Requirements
 - Jython
